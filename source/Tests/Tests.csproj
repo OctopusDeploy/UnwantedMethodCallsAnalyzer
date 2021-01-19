@@ -8,6 +8,7 @@
     <LangVersion>8</LangVersion>
     <DisableImplicitPackageTargetFallback>true</DisableImplicitPackageTargetFallback>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <nullable>enable</nullable>
   </PropertyGroup>
 
   <ItemGroup>

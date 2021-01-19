@@ -6,44 +6,21 @@ using Microsoft.CodeAnalysis.Testing;
 using Microsoft.CodeAnalysis.Testing.Verifiers;
 using NUnit.Framework;
 using Octopus.RoslynAnalysers;
-using Verify = Microsoft.CodeAnalysis.CSharp.Testing.NUnit.AnalyzerVerifier<Octopus.RoslynAnalysers.UnwantedMethodCallAnalyzer>;
+using Verify = Microsoft.CodeAnalysis.CSharp.Testing.NUnit.AnalyzerVerifier<Octopus.RoslynAnalysers.TheProcessStartMethodShouldNotBeCalledAnalyzer>;
 using static Microsoft.CodeAnalysis.Testing.DiagnosticResult;
 
 namespace Tests
 {
-    public class UnwantedMethodCallAnalyzerTest
+    public class TheProcessStartMethodShouldNotBeCalledAnalyzerFixture
     {
-        const string AdditionalFileText = @"
-{
-  ""UnwantedMethods"": [
-    {
-      ""TypeNamespace"": ""System.Diagnostics.Process"",
-      ""MethodName"": ""Start"",
-      ""UnwantedReason"": ""This would be bad to call""
-      ""ExcludeCheckingTypes"": [
-        ""ConsoleApplication1.ShouldBeIgnored""
-      ]
-    }
-  ]
-}
-";
-
-        static readonly (string AdditionalFileName, string AdditionalFileText)[] AdditionalFiles =
-        {
-            (UnwantedMethodCallAnalyzer.ConfigurationFileName, AdditionalFileText)
-        };
-
         [Test]
         public async Task EmptySourceSucceeds()
-        {
-            var test = @"";
-            await Verify.VerifyAnalyzerAsync(test);
-        }
+            => await Verify.VerifyAnalyzerAsync("");
 
         [Test]
         public async Task SourceWithBadCallsFails()
         {
-            var test = @"
+            const string source = @"
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -80,6 +57,7 @@ namespace ConsoleApplication1
     {        
         void BadMethod()
         {
+#pragma warning disable Octopus_ProcessStart
             Process.Start(new ProcessStartInfo(""testMethod"")
             {
                 Arguments = ""commit -m message && exec maliciousProcess""
@@ -88,21 +66,11 @@ namespace ConsoleApplication1
     }
 }";
 
-            var expectedMessage = UnwantedMethodCallAnalyzer.MessageFormat
-                .Replace("{0}", "System.Diagnostics.Process.Start")
-                .Replace("{1}", "\nUnwanted Reason: This would be bad to call");
-            var expectedRule = new DiagnosticDescriptor(UnwantedMethodCallAnalyzer.DiagnosticId,
-                UnwantedMethodCallAnalyzer.Title,
-                expectedMessage,
-                UnwantedMethodCallAnalyzer.Category,
-                DiagnosticSeverity.Error,
-                true);
-            var result1 = new DiagnosticResult(expectedRule).WithLocation(0);
-            var result2 = new DiagnosticResult(expectedRule).WithLocation(1);
+            var result1 = new DiagnosticResult(TheProcessStartMethodShouldNotBeCalledAnalyzer.Rule).WithLocation(0);
+            var result2 = new DiagnosticResult(TheProcessStartMethodShouldNotBeCalledAnalyzer.Rule).WithLocation(1);
 
-            await VerifyWithAdditionalFiles(
-                test,
-                AdditionalFiles,
+            await Verify.VerifyAnalyzerAsync(
+                source,
                 result1,
                 result2
             );
@@ -111,7 +79,7 @@ namespace ConsoleApplication1
         [Test]
         public async Task SourceWithNoUnwantedCallsSucceeds()
         {
-            var test = @"
+            const string source = @"
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -133,53 +101,7 @@ namespace ConsoleApplication1
     }
 }";
 
-            await VerifyWithAdditionalFiles(test, AdditionalFiles);
-        }
-
-        [Test]
-        public async Task EmptyJsonAdditionalFileTextSucceeds()
-        {
-            var emptyJson = "{}";
-            var test = @"
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Diagnostics;
-
-namespace ConsoleApplication1
-{
-    class TypeName
-    {            
-        void BadMethod()
-        {
-            Process.Start(new ProcessStartInfo(""testMethod"")
-            {
-                Arguments = ""commit -m message && exec maliciousProcess""
-            });
-        }
-    }
-}";
-
-            var additionalFiles = new[] { (UnwantedMethodCallAnalyzer.ConfigurationFileName, additionalFileText: emptyJson) };
-            await VerifyWithAdditionalFiles(test, additionalFiles);
-        }
-
-        async Task VerifyWithAdditionalFiles(string source,
-            (string ConfigurationFileName, string additionalFileText)[] additionalFiles,
-            params DiagnosticResult[] expectedDiagnostics)
-        {
-            var test = new CSharpAnalyzerTest<UnwantedMethodCallAnalyzer, NUnitVerifier>();
-            test.TestState.Sources.Add(source);
-
-            foreach (var diag in expectedDiagnostics)
-                test.TestState.ExpectedDiagnostics.Add(diag);
-
-            foreach (var file in additionalFiles)
-                test.TestState.AdditionalFiles.Add(file);
-
-            await test.RunAsync();
+            await Verify.VerifyAnalyzerAsync(source);
         }
     }
 }
